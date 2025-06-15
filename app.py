@@ -21,7 +21,8 @@ app = FastAPI()
 origins = [
     "http://localhost",
     "http://localhost:8080",  # Your frontend's origin
-    "http://192.168.29.53:8080"
+    "https://jugaad-frontend.vercel.app",
+    "http://192.168.29.53:8080/"
 ]
 
 app.add_middleware(
@@ -70,6 +71,12 @@ async def is_existing_user(db, user_uid: str):
 
 gdf = None  # GeoDataFrame for pin code polygons
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logging.info(f"Incoming request: {request.method} {request.url}")
+    response = await call_next(request)
+    return response
 
 @app.on_event("startup")
 def load_geojson():
@@ -257,9 +264,6 @@ def reverse_pincode(lat: float, lon: float) -> LocationResponse:
     else:
         raise HTTPException(status_code=404, detail="Pincode not found for given coordinates")
 
-@app.exception_handler(Exception)
-async def log_exceptions(request: Request, exc: Exception):
-    logging.error(f"Unhandled error for {request.url}: {exc}", exc_info=True)
 # Example root endpoint
 @app.get("/")
 async def read_root():
