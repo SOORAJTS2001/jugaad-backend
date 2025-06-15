@@ -19,6 +19,7 @@ apscheduler = "*"
 brevo-python = "*"
 geopandas = "*"
 shapely = "*"
+uvicorn = "^0.34.3"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
