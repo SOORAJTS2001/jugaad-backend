@@ -1,27 +1,39 @@
-# Use a base image with Python
+# Use a minimal Python image
 FROM python:3.12-slim
 
-# Set working directory
+# Set working directory inside the container
 WORKDIR /app
 
-# Copy pyproject.toml and poetry.lock first to leverage Docker caching
+# Prevent Python from writing .pyc files
+ENV PYTHONDONTWRITEBYTECODE=1
+# Prevent Python from buffering stdout/stderr
+ENV PYTHONUNBUFFERED=1
+
+# Set default port value and expose it
+ARG PORT=8000
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y curl build-essential \
+    && apt-get clean
+
+# Install Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 - \
+    && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
+# Disable Poetry virtualenv creation
+RUN poetry config virtualenvs.create false
+
+# Copy dependency declarations first to cache Docker layers
 COPY pyproject.toml poetry.lock ./
 
-# Install Poetry and dependencies
-RUN pip install poetry
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-dev --no-root
+# Install dependencies (excluding dev, not installing package itself)
+RUN poetry install --no-dev --no-root
 
-# Copy the rest of your application code
+# Copy the application code
 COPY . .
 
-EXPOSE ${PORT:-8000} # This exposes $PORT if set, otherwise defaults to 8000
-
-# Command to run your FastAPI application
-# Use 'exec' form for better signal handling and environment variable expansion
-CMD ["/bin/bash", "-c", "uvicorn app:app --host 0.0.0.0 --port $PORT"]
-
-# Alternative using ENTRYPOINT for migrations (more advanced)
-# ENTRYPOINT ["/bin/bash", "-c"]
-# CMD ["poetry", "run", "python", "migrate.py", "&&", "uvicorn", "your_app_module:app", "--host", "0.0.0.0", "--port", "$PORT"]
-# This is more complex and usually better handled with Railway's pre-deploy step or separate services for migrations.
+# Run FastAPI using uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
