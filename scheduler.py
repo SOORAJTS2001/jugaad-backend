@@ -14,7 +14,7 @@ scheduler = AsyncIOScheduler()
 async def start_scheduler():
     scheduler.add_job(
         worker,
-        CronTrigger(second=30),
+        CronTrigger(hour=1),
         id="jiomart_price_updater",
         name="JioMart Price Updater",
         replace_existing=True,
