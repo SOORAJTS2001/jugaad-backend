@@ -177,6 +177,7 @@ async def add_items(request: AddedItemsRequest, db: AsyncSession = Depends(get_d
             category=response["data"]["gtm_details"]["category"],
 
         )
+        await db.merge(item)
         item_logger = ItemsPriceLogger(**item.to_dict())
         await db.refresh(existing_user, attribute_names=["selected_items"])
         selected_item = UserSelectedItems(
@@ -191,7 +192,6 @@ async def add_items(request: AddedItemsRequest, db: AsyncSession = Depends(get_d
             existing_user.selected_items.append(selected_item)
             db.add(existing_user)
         db.add(item_logger)
-        await db.merge(item)
         await db.commit()
         return {"status": "success"}
 
