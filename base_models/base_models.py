@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class UserInput(BaseModel):
     uid: str
     email: str
-    pincode: str
+    pincode: str | None = "682020"
     username: str | None = None
     item_id: str | None = None
 
