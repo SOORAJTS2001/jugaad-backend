@@ -11,6 +11,7 @@ MAILER_PASSWORD = os.getenv("MAILER_PASSWORD")
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 else:
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
     connect_args = {}
 
 async_engine = create_async_engine(

@@ -20,7 +20,7 @@ brevo-python = "*"
 geopandas = "*"
 shapely = "*"
 uvicorn = "^0.34.3"
-psycopg2-binary = "^2.9.10"
+asyncpg = "^0.30.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"
