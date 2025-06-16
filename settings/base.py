@@ -3,7 +3,7 @@ import os
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import declarative_base
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./sql_app.db")
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 MAILER_ADDRESS = os.getenv("MAILER_ADDRESS")
 MAILER_PASSWORD = os.getenv("MAILER_PASSWORD")
 
