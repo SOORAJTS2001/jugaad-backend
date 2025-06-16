@@ -1,8 +1,10 @@
-from sqlalchemy import Column, String, Float, Integer, DateTime, PrimaryKeyConstraint, Boolean,  \
-    ForeignKey
+import uuid
+
+from sqlalchemy import Column, String, Float, Integer, DateTime, PrimaryKeyConstraint, Boolean, \
+    ForeignKey, ForeignKeyConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import uuid
+
 from settings import Base
 
 
@@ -22,7 +24,8 @@ class UserSelectedItems(Base):
 
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     user_uid = Column(String, ForeignKey("users.uid"), nullable=False)
-    item_id = Column(String, ForeignKey("items.item_id"), nullable=False)
+    item_id = Column(String, nullable=False)
+    pincode = Column(String, nullable=False)  # Add this to match target composite key
     min_price = Column(Float, nullable=True)
     max_price = Column(Float, nullable=True)
     min_offer = Column(Float, nullable=True)
@@ -30,6 +33,14 @@ class UserSelectedItems(Base):
 
     def __eq__(self, other):
         return self.item_id == other.item_id
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["item_id", "pincode"],  # source columns
+            ["items.item_id", "items.pincode"],  # target composite PK
+            ondelete="CASCADE"
+        ),
+    )
 
 
 class Items(Base):
@@ -87,6 +98,7 @@ class ItemsPriceLogger(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
     def to_dict(self):
         return {
             "last_updated_timestamp": self.last_updated_timestamp,

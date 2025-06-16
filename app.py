@@ -118,7 +118,7 @@ async def signup_or_get_user(user: UserInput, db: AsyncSession = Depends(get_db_
             uid=user.uid,
             username=user.username,
             email=user.email,
-            pincode=user.pincode
+            pincode=user.pincode if user.pincode else "682020"
         )
         db.add(new_user)
         try:
@@ -183,6 +183,7 @@ async def add_items(request: AddedItemsRequest, db: AsyncSession = Depends(get_d
         selected_item = UserSelectedItems(
             user_uid=existing_user.uid,
             item_id=item_id,
+            pincode=request.pincode,
             min_price=request.min_price,
             max_price=request.max_price or item.selling_price,
             min_offer=request.min_offer,
@@ -202,7 +203,7 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
     if not existing_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     await db.refresh(existing_user, attribute_names=["selected_items"])
-    keys = [(item.item_id, existing_user.pincode) for item in existing_user.selected_items]
+    keys = [(item.item_id, "682020") for item in existing_user.selected_items]
     stmt = select(Items).where(
         tuple_(Items.item_id, Items.pincode).in_(keys)
     )
@@ -212,7 +213,6 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
     for item in results:
         for existing_item in existing_user.selected_items:
             if item.item_id == existing_item.item_id:
-                print(item.item_id, item.pincode)
                 item = AddedItemsResponse.model_validate(item)
                 item.price_change = str(item.mrp_price - item.selling_price)
                 item.max_price = existing_item.max_price
@@ -226,9 +226,11 @@ async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
     existing_user: DBUser = await is_existing_user(db, user.uid)
     if not existing_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    stmt = select(Items).where(Items.item_id == user.item_id)
+    stmt = select(Items).where(Items.item_id == user.item_id and Items.pincode == user.pincode)
     result = await db.execute(stmt)
     result = result.scalar_one_or_none()
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     item = AddedItemsResponse.model_validate(result)
     stmt = select(ItemsPriceLogger).where(
         ItemsPriceLogger.item_id == user.item_id and ItemsPriceLogger.pincode == user.pincode).order_by(
