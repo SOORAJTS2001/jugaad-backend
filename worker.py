@@ -108,6 +108,12 @@ async def price_match(user: DBUser, selected_item: UserSelectedItems, item_price
     return False
 
 
+postgresql://postgres:ZHgESYrDvqQODNzuVypwQhUAURJdmRUK@turntable.proxy.rlwy.net:50826/railway
+
+
+
+
+
 async def process_user(user: DBUser, async_session: AsyncSession, client: httpx.AsyncClient):
     logging.info("Processing user %s", user.uid)
     for selected_item in user.selected_items:

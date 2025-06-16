@@ -8,7 +8,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from shapely.geometry import Point
-from sqlalchemy import select, tuple_, desc
+from sqlalchemy import select, tuple_, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsPriceLoggerBaseModel, LocationResponse
@@ -212,6 +212,7 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
     for item in results:
         for existing_item in existing_user.selected_items:
             if item.item_id == existing_item.item_id:
+                print(item.item_id, item.pincode)
                 item = AddedItemsResponse.model_validate(item)
                 item.price_change = str(item.mrp_price - item.selling_price)
                 item.max_price = existing_item.max_price
@@ -239,6 +240,22 @@ async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
     item.logs = logs
     item.last_updated_timestamp = logs[0].last_updated_timestamp
     return item
+
+
+@app.post("/delete-item")
+async def delete_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
+    existing_user: DBUser = await is_existing_user(db, user.uid)
+    if not existing_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    await db.refresh(existing_user, attribute_names=["selected_items"])
+    del_stmt = delete(UserSelectedItems).where(
+        UserSelectedItems.user_uid == user.uid,
+        UserSelectedItems.item_id == user.item_id
+    )
+    await db.execute(del_stmt)
+    await db.commit()
+
+    return {"status": "success"}
 
 
 @app.get("/reverse")
