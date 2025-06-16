@@ -11,7 +11,7 @@ class DBUser(Base):
     __tablename__ = "users"
 
     uid = Column(String, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=True)
+    username = Column(String, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)  # Email is mandatory
     pincode = Column(String)
     selected_items = relationship("UserSelectedItems", cascade="all, delete-orphan")
@@ -34,8 +34,8 @@ class UserSelectedItems(Base):
 
 class Items(Base):
     __tablename__ = "items"
-    item_id = Column(String, unique=True, index=True)
-    source_url = Column(String, unique=True)
+    item_id = Column(String, index=True)
+    source_url = Column(String,)
     pincode = Column(String)
     name = Column(String, index=True, nullable=True)
     mrp_price = Column(Float, nullable=True)
