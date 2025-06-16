@@ -1,7 +1,7 @@
 from sqlalchemy import Column, String, Float, Integer, DateTime, PrimaryKeyConstraint, Boolean,  \
     ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.sql import func
 import uuid
 from settings import Base
 
@@ -82,8 +82,11 @@ class ItemsPriceLogger(Base):
     is_available = Column(Boolean, nullable=True)
     brand = Column(String, nullable=True)
     category = Column(String, nullable=True)
-    last_updated_timestamp = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    last_updated_timestamp = Column(
+        DateTime(timezone=True),  # tell SQLAlchemy this is tz-aware
+        server_default=func.now(),
+        onupdate=func.now()
+    )
     def to_dict(self):
         return {
             "last_updated_timestamp": self.last_updated_timestamp,

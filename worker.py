@@ -112,14 +112,15 @@ async def process_user(user: DBUser, async_session: AsyncSession, client: httpx.
     logging.info("Processing user %s", user.uid)
     for selected_item in user.selected_items:
         item = await async_session.get(Items, (selected_item.item_id, user.pincode))
-        item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url)
-        if await price_match(user, selected_item, item_price, async_session):
-            print("✅  Mail sent to the user about offer")
-        for k, v in item_price.items():
-            if hasattr(item, k):
-                setattr(item, k, v)
-        del item_price['image_url']
-        async_session.add(ItemsPriceLogger(**item_price))
+        if item:
+            item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url)
+            if await price_match(user, selected_item, item_price, async_session):
+                print("✅  Mail sent to the user about offer")
+            for k, v in item_price.items():
+                if hasattr(item, k):
+                    setattr(item, k, v)
+            del item_price['image_url']
+            async_session.add(ItemsPriceLogger(**item_price))
     await async_session.commit()
 
 
