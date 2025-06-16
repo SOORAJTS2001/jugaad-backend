@@ -108,7 +108,6 @@ async def price_match(user: DBUser, selected_item: UserSelectedItems, item_price
     return False
 
 
-postgresql://postgres:ZHgESYrDvqQODNzuVypwQhUAURJdmRUK@turntable.proxy.rlwy.net:50826/railway
 
 
 
