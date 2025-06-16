@@ -51,6 +51,7 @@ class AddedItemsResponse(BaseModel):
     category: Optional[str] = None
     price_change: Optional[str] = None
     logs: list[ItemsPriceLoggerBaseModel] | None = None
+    last_updated_timestamp: datetime | None = None
 
     class Config:
         from_attributes = True

@@ -8,12 +8,13 @@ import httpx
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from shapely.geometry import Point
-from sqlalchemy import select, tuple_
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import select, tuple_, desc
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsPriceLoggerBaseModel, LocationResponse
-from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems, Base
+from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from scheduler import start_scheduler
+from settings import async_engine, Base
 
 # --- FastAPI App Setup ---
 app = FastAPI()
@@ -22,7 +23,7 @@ origins = [
     "http://localhost",
     "http://localhost:8080",  # Your frontend's origin
     "https://jugaad-frontend.vercel.app",
-    "http://192.168.29.53:8080/"
+    "http://192.168.29.206:8080"
 ]
 
 app.add_middleware(
@@ -36,16 +37,12 @@ app.add_middleware(
 # --- Database Configuration ---
 # Use 'sqlite+aiosqlite' dialect for asynchronous SQLite with SQLAlchemy
 ROOT_DIR = os.path.dirname(__file__)
-DATABASE_URL = "sqlite+aiosqlite:///./sql_app.db"
 PRICE_ENDPOINT = "https://www.jiomart.com/catalog/productdetails/get"
 PINCODE_BOUNDARIES = os.path.join(ROOT_DIR, "postcode_boundaries.geojson")
 
 # Create an asynchronous engine
 # connect_args={"check_same_thread": False} is STILL needed for SQLite,
 # even with aiosqlite, as aiosqlite still runs its operations in a thread pool.
-async_engine = create_async_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}, echo=False  # echo=True for SQL logging
-)
 
 # Asynchronous sessionmaker
 AsyncSessionLocal = async_sessionmaker(
@@ -78,12 +75,13 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     return response
 
+
 @app.on_event("startup")
 def load_geojson():
     global gdf
     gdf = gpd.read_file(PINCODE_BOUNDARIES)
     gdf = gdf.to_crs(epsg=4326)
-    print(f"Loaded {len(gdf)} pincode polygons.")
+    print(f"✅ Loaded Pincodes")
 
 
 # --- FastAPI Lifecycle Events ---
@@ -92,16 +90,16 @@ async def startup_event():
     # Create tables if they don't exist
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print(f"SQLite database '{DATABASE_URL}' initialized and table checked.")
+    print("✅ SQLite database  initialized and table checked.")
     await start_scheduler()
-    print("Scheduler started")
+    print("✅ Scheduler started")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     # Dispose of the engine connection pool
     await async_engine.dispose()
-    print("FastAPI shutdown and database engine disposed.")
+    print("✅ FastAPI shutdown and database engine disposed.")
 
 
 # --- API Endpoint ---
@@ -231,14 +229,15 @@ async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
     result = await db.execute(stmt)
     result = result.scalar_one_or_none()
     item = AddedItemsResponse.model_validate(result)
-    print(item.image_url)
     stmt = select(ItemsPriceLogger).where(
-        ItemsPriceLogger.item_id == user.item_id and ItemsPriceLogger.pincode == user.pincode)
+        ItemsPriceLogger.item_id == user.item_id and ItemsPriceLogger.pincode == user.pincode).order_by(
+        desc(ItemsPriceLogger.last_updated_timestamp))
     result = await db.execute(stmt)
     logs = []
     for log in result.scalars().all():
         logs.append(ItemsPriceLoggerBaseModel(**log.to_dict()))
     item.logs = logs
+    item.last_updated_timestamp = logs[0].last_updated_timestamp
     return item
 
 
@@ -263,6 +262,7 @@ def reverse_pincode(lat: float, lon: float) -> LocationResponse:
         return LocationResponse(**data)
     else:
         raise HTTPException(status_code=404, detail="Pincode not found for given coordinates")
+
 
 # Example root endpoint
 @app.get("/")

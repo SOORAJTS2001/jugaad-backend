@@ -3,7 +3,7 @@
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from worker import worker
 
@@ -14,7 +14,7 @@ scheduler = AsyncIOScheduler()
 async def start_scheduler():
     scheduler.add_job(
         worker,
-        CronTrigger(hour=1),
+        IntervalTrigger(hours=1, timezone="Asia/Kolkata"),
         id="jiomart_price_updater",
         name="JioMart Price Updater",
         replace_existing=True,

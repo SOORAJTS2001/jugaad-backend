@@ -2,16 +2,14 @@ import smtplib
 from email.message import EmailMessage
 
 from base_models import MailTemplate
-
-SENDER_ADDRESS = 'tracker.jugaad@gmail.com'
-SENDER_PASSWORD = "ndmc waws xyle bxak"  # Use the 16-character app password
+from settings import MAILER_ADDRESS, MAILER_PASSWORD
 
 
 def send_mail(data: MailTemplate):
     # Compose the email
     msg = EmailMessage()
     msg['Subject'] = 'Price Drop Alert From JioMart'
-    msg['From'] = SENDER_ADDRESS
+    msg['From'] = MAILER_ADDRESS
     msg['To'] = data.user_email
     msg.set_content('This is a fallback plain-text message for clients that do not support HTML.')
     html_content = f"""
@@ -69,7 +67,7 @@ def send_mail(data: MailTemplate):
     msg.add_alternative(html_content, subtype='html')
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(SENDER_ADDRESS, SENDER_PASSWORD)
+            smtp.login(MAILER_ADDRESS, MAILER_PASSWORD)
             smtp.send_message(msg)
             print("Email sent successfully!")
     except Exception as e:

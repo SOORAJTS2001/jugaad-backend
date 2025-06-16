@@ -3,11 +3,7 @@ from sqlalchemy import Column, String, Float, Integer, DateTime, PrimaryKeyConst
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
-from sqlalchemy.ext.declarative import declarative_base
-
-
-# Base class for declarative models
-Base = declarative_base()
+from settings import Base
 
 
 # --- Database Models ---
