@@ -18,7 +18,7 @@ class AddedItemsRequest(BaseModel):
     email: str
     username: str
     url: str
-    pincode: str
+    pincode: str | None = "682020"
     min_price: float | None = None
     max_price: float | None = None
     min_offer: float | None = None
