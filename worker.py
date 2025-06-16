@@ -12,12 +12,13 @@ from base_models import MailTemplate
 from mailer import send_mail
 from models import DBUser, UserSelectedItems, Items, ItemsPriceLogger
 
-DATABASE_URL = "sqlite+aiosqlite:///./sql_app.db"
+from settings import async_engine
+
 PRICE_ENDPOINT = "https://www.jiomart.com/catalog/productdetails/get/"
 CONCURRENT_REQUESTS = 20
 
-engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
-Session = async_sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+Session = async_sessionmaker(bind=async_engine, autoflush=False, expire_on_commit=False)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -113,7 +114,7 @@ async def process_user(user: DBUser, async_session: AsyncSession, client: httpx.
         item = await async_session.get(Items, (selected_item.item_id, user.pincode))
         item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url)
         if await price_match(user, selected_item, item_price, async_session):
-            print("Mail sent to the user about offer")
+            print("✅  Mail sent to the user about offer")
         for k, v in item_price.items():
             if hasattr(item, k):
                 setattr(item, k, v)
@@ -123,13 +124,12 @@ async def process_user(user: DBUser, async_session: AsyncSession, client: httpx.
 
 
 async def worker():
-    print("Worker Started")
+    print("✅ Worker Started")
     async with Session() as session, httpx_client() as client:
         users = (await session.execute(
             select(DBUser).options(selectinload(DBUser.selected_items))
         )).scalars().all()
         for user in users:
-            print(user.uid)
             await process_user(user, session, client)
 
 
