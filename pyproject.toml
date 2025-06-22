@@ -21,6 +21,7 @@ geopandas = "*"
 shapely = "*"
 uvicorn = "^0.34.3"
 asyncpg = "^0.30.0"
+aiosmtplib = "^4.0.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"

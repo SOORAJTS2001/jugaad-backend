@@ -147,7 +147,7 @@ async def add_items(request: AddedItemsRequest, db: AsyncSession = Depends(get_d
         response = await client.get(f"{PRICE_ENDPOINT}{match}", headers={
             "accept": "application/json, text/javascript, */*; q=0.01",
             "accept-language": "en-US,en;q=0.9",
-            "pin": "682020",
+            "pin": request.pincode,
             "priority": "u=0, i",
             "referer": request.url,
             "sec-fetch-dest": "empty",
