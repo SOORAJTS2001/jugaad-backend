@@ -8,8 +8,9 @@ import httpx
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from shapely.geometry import Point
-from sqlalchemy import select, tuple_, desc, delete
+from sqlalchemy import select, tuple_, desc, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.responses import JSONResponse
 
 from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsPriceLoggerBaseModel, LocationResponse
 from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
@@ -284,6 +285,11 @@ def reverse_pincode(lat: float, lon: float) -> LocationResponse:
 
 
 # Example root endpoint
-@app.get("/")
-async def read_root():
-    return {"message": "Welcome to the FastAPI backend!"}
+@app.get("/ping", tags=["Health"])
+async def health_check(db: AsyncSession = Depends(get_db_session)):
+    try:
+        await db.execute(text('SELECT 1'))
+        return JSONResponse(content={"message": "PONG"})
+    except Exception as e:
+        logging.error(e)
+        return JSONResponse(content={"message": "Oops! I Crashed"})

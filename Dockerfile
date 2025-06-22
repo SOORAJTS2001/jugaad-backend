@@ -9,10 +9,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Prevent Python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
 
-# Set default port value and expose it
-ARG PORT=8000
-ENV PORT=${PORT}
-EXPOSE ${PORT}
 
 # Install system dependencies
 RUN apt-get update \
@@ -36,4 +32,4 @@ RUN poetry install --no-root
 COPY . .
 
 # Run FastAPI using uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port $PORT"]
