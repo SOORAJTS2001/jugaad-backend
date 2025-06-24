@@ -110,7 +110,7 @@ async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, sou
 async def get_latest_price(session: AsyncSession, item_id: str, pincode: str) -> ItemsPriceLogger | None:
     stmt = (
         select(ItemsPriceLogger)
-        .where(ItemsPriceLogger.item_id == item_id, ItemsPriceLogger.pincode == pincode)
+        .where((ItemsPriceLogger.item_id == item_id) & (ItemsPriceLogger.pincode == pincode))
         .order_by(desc(ItemsPriceLogger.last_updated_timestamp))
         .limit(1)
     )
@@ -131,7 +131,6 @@ async def price_match(
 
     price_dropped = item_price["selling_price"] < selected_item.max_price
     offer_improved = item_price["discount_percent"] > selected_item.max_offer
-    print(selected_item.max_price,item_price["selling_price"])
     if not (price_dropped or offer_improved):
         return False
 

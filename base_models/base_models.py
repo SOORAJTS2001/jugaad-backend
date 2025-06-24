@@ -11,6 +11,14 @@ class UserInput(BaseModel):
     pincode: str | None = "682020"
     username: str | None = None
     item_id: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+
+class ItemMetadata(BaseModel):
+    rating: float | None = None
+    summary: str | None = None
+    distance: float | None = None
 
 
 class AddedItemsRequest(BaseModel):
@@ -37,6 +45,7 @@ class AddedItemsResponse(BaseModel):
     item_id: str
     source_url: Optional[str] = None
     pincode: str
+    item_metadata: ItemMetadata | None = None
     max_price: Optional[float] = None
     max_offer: Optional[float] = None
     name: Optional[str] = None
@@ -66,9 +75,10 @@ class MailTemplate(BaseModel):
     curr_price: str
     change_percent: str
 
+
 class LocationResponse(BaseModel):
-    pincode:str
-    name:str
-    division:str
-    region:str
-    circle:str
+    pincode: str
+    name: str
+    division: str
+    region: str
+    circle: str

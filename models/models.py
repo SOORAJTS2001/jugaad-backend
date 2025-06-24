@@ -73,6 +73,9 @@ class Items(Base):
             "is_available": self.is_available,
         }
 
+    def __repr__(self):
+        return f"<Items {self.item_id=} {self.pincode=} {self.name=} {self.selling_price=}>"
+
     __table_args__ = (
         PrimaryKeyConstraint('item_id', 'pincode', name='pk_item_pincode'),
     )
