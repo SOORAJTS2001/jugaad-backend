@@ -100,6 +100,7 @@ async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, sou
             "accept": "application/json, text/javascript, */*; q=0.01",
             "pin": pincode,
             "referer": source_url,
+            "cookie": cookie,
             "user-agent": (
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 "
