@@ -1,23 +1,34 @@
+import requests
 
-import geopandas as gpd
-from shapely.geometry import Point
+def get_jiomart_price(product_url: str, pincode: str = "695583"):
+    session = requests.Session()
 
-# Load the GeoJSON file
-gdf = gpd.read_file("postcode_boundaries.geojson")
-# Example coordinates
-lat = 9.977633
-lon = 76.2929212
-point = Point(lon, lat)
+    # Set headers to mimic a real browser
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Accept-Language": "en-US,en;q=0.9"
+    })
 
-# Ensure same coordinate reference system (CRS)
-gdf = gdf.to_crs(epsg=4326)
+    # Step 1: Manually inject location cookies
+    session.cookies.set("nms_mgo_city", "Thiruvananthapuram")
+    session.cookies.set("nms_mgo_state_code", "KL")
+    session.cookies.set("nms_mgo_pincode", pincode)
+    session.cookies.set("new_customer", "false")
 
-# Find matching pincode
-match = gdf[gdf.geometry.contains(point)]
+    # Step 2: Visit homepage or any page to allow session cookies to populate
+    session.get("https://www.jiomart.com")
 
-if not match.empty:
-    print("Matched Pincode:", match.iloc[0]['Pincode'])
-    print("Office Name:", match.iloc[0]['Office_Name'])
-else:
-    print("No match found for given lat/lon.")
+    # Step 3: Now call the product URL
+    response = session.get(product_url)
 
+    return {
+        "status": response.status_code,
+        "cookies": session.cookies.get_dict(),
+        "content": response.text[:1000]  # limit output
+    }
+
+# Example usage
+product_url = "https://www.jiomart.com/p/groceries/yogabar-protein-muesli-350-g/608274052"
+result = get_jiomart_price(product_url)
+print(result["cookies"])
+  # print only part of the HTML

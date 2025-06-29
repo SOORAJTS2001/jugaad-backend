@@ -18,6 +18,7 @@ from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsP
 from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from scheduler import start_scheduler
 from settings import async_engine, Base
+LOGGER = logging.getLogger("app")
 
 # --- FastAPI App Setup ---
 app = FastAPI()
@@ -120,7 +121,7 @@ def load_geojson():
     global gdf
     gdf = gpd.read_file(PINCODE_BOUNDARIES)
     gdf = gdf.to_crs(epsg=4326)
-    print(f"✅ Loaded Pincodes")
+    LOGGER.info(f"✅ Loaded Pincodes")
 
 
 # --- FastAPI Lifecycle Events ---
@@ -129,16 +130,16 @@ async def startup_event():
     # Create tables if they don't exist
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("✅ SQLite database  initialized and table checked.")
+    LOGGER.info("✅ SQLite database  initialized and table checked.")
     await start_scheduler()
-    print("✅ Scheduler started")
+    LOGGER.info("✅ Scheduler started")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     # Dispose of the engine connection pool
     await async_engine.dispose()
-    print("✅ FastAPI shutdown and database engine disposed.")
+    LOGGER.info("✅ FastAPI shutdown and database engine disposed.")
 
 
 # --- API Endpoint ---
@@ -148,10 +149,10 @@ async def signup_or_get_user(user: UserInput, db: AsyncSession = Depends(get_db_
     # Use await session.execute() for async queries
     existing_user = await is_existing_user(db, user.uid)
     if existing_user:
-        print(f"User with UID {user.uid} already exists.")
+        LOGGER.warning(f"User with UID {user.uid} already exists.")
         return existing_user  # SQLAlchemy object directly converted by Pydantic's from_attributes
     else:
-        print(f"Creating new user with UID {user.uid}.")
+        LOGGER.warning(f"Creating new user with UID {user.uid}.")
         # 2. Create new user
         new_user = DBUser(
             uid=user.uid,
@@ -242,7 +243,6 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
     if not existing_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     await db.refresh(existing_user, attribute_names=["selected_items"])
-    print(existing_user.pincode)
     keys = [(item.item_id, existing_user.pincode) for item in existing_user.selected_items]
     stmt = select(Items).where(
         tuple_(Items.item_id, Items.pincode).in_(keys)

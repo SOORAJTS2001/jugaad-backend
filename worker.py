@@ -13,11 +13,6 @@ Required env vars (Railway → Variables):
 Install dependency:
     pip install aiosmtplib
 """
-
-import os
-from email.message import EmailMessage
-from typing import Optional
-
 from mailer import send_mail_async
 
 # ============================================
@@ -31,8 +26,6 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from functools import partial
-from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import desc, select
@@ -44,12 +37,15 @@ from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from settings import async_engine
 
 PRICE_ENDPOINT = "https://www.jiomart.com/catalog/productdetails/get/"
+ITEM_DISTANCE_ENDPOINT = "https://www.jiomart.com/mst/rest/v1/5/pin/"
+
 CONCURRENT_REQUESTS = 20
 
 Session = async_sessionmaker(bind=async_engine, autoflush=False, expire_on_commit=False)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOGGER = logging.getLogger("worker")
+
 
 # ---------------------------------------------------------------------------
 # HTTP helpers
@@ -58,15 +54,46 @@ LOGGER = logging.getLogger("worker")
 @asynccontextmanager
 async def httpx_client():
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(30.0),
-        headers={"User-Agent": "JioMartPriceTracker/1.0"},
-        http2=True,
-        follow_redirects=True,
+            timeout=httpx.Timeout(30.0),
+            headers={"User-Agent": "JioMartPriceTracker/1.0"},
+            http2=True,
+            follow_redirects=True,
     ) as client:
         yield client
 
 
-async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, source_url: str) -> dict:
+async def fetch_cookies(client: httpx.AsyncClient, pincode: str) -> dict:
+    LOGGER.info(f"Fetching Cookie For {pincode}")
+    """
+    Fetches Jiomart regional cookies (city, state code, pincode, new_customer)
+    using the ITEM_DISTANCE_ENDPOINT.
+    """
+    headers = {
+        "accept": "application/json",
+        "accept-language": "en-US,en;q=0.9",
+        "origin": "https://www.jiomart.com",
+        "referer": "https://www.jiomart.com/",
+        "user-agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+        ),
+        "vertical": "jiomart",
+    }
+
+    resp = await client.get(f"{ITEM_DISTANCE_ENDPOINT}{pincode}", headers=headers)
+    resp.raise_for_status()
+    result = resp.json().get("result", {})
+
+    return {
+        "nms_mgo_city": result.get("city", ""),
+        "nms_mgo_state_code": result.get("state_code", ""),
+        "nms_mgo_pincode": pincode,
+        "new_customer": "false",  # Must be string to match browser format
+    }
+
+
+async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, source_url: str,
+                      cookie: dict) -> dict | None:
     resp = await client.get(
         f"{PRICE_ENDPOINT}{item_id}",
         headers={
@@ -83,7 +110,9 @@ async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, sou
     )
     resp.raise_for_status()
     raw = resp.json()
-
+    if raw['status'] == 'failure':
+        LOGGER.warning(f"Could not fetch price for {source_url}")
+        return None
     data = raw["data"]
     gtm = data["gtm_details"]
     return {
@@ -122,7 +151,7 @@ async def get_latest_price(session: AsyncSession, item_id: str, pincode: str) ->
 # ---------------------------------------------------------------------------
 
 async def price_match(
-    user: DBUser, selected_item: UserSelectedItems, item_price: dict, session: AsyncSession
+        user: DBUser, selected_item: UserSelectedItems, item_price: dict, session: AsyncSession
 ) -> bool:
     """Return True if mail was sent."""
     prev_price_row = await get_latest_price(session, selected_item.item_id, user.pincode)
@@ -154,13 +183,18 @@ async def price_match(
 
 async def process_user(user: DBUser, client: httpx.AsyncClient):
     LOGGER.info("Processing user %s", user.uid)
+    cookie = await fetch_cookies(client, user.pincode)
     async with Session() as session:
         for selected_item in user.selected_items:
             item = await session.get(Items, (selected_item.item_id, user.pincode))
             if not item:
                 continue
 
-            item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url)
+            item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url, cookie=cookie)
+            if not item_price:
+                item.is_available = False
+                await session.commit()
+                continue
             await price_match(user, selected_item, item_price, session)
 
             # update Items row
@@ -181,6 +215,7 @@ async def process_user(user: DBUser, client: httpx.AsyncClient):
 # ---------------------------------------------------------------------------
 
 SEM = asyncio.Semaphore(CONCURRENT_REQUESTS)
+
 
 async def _handle_user_sem(user, client):
     async with SEM:
