@@ -8,6 +8,7 @@ import httpx
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from haversine import haversine, Unit
+import asyncio
 from shapely.geometry import Point
 from sqlalchemy import select, tuple_, desc, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -18,6 +19,7 @@ from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsP
 from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from scheduler import start_scheduler
 from settings import async_engine, Base
+
 LOGGER = logging.getLogger("app")
 
 # --- FastAPI App Setup ---
@@ -73,37 +75,43 @@ async def is_existing_user(db, user_uid: str):
     return result.scalar_one_or_none()  # Use scalar_one_or_none() for a single result
 
 
+
 async def get_metadata(item_id: str, pincode: str, user_lat: float, user_lng: float) -> ItemMetadata:
     metadata = ItemMetadata()
+    headers = {
+        "accept": "application/json",
+        "accept-language": "en-US,en;q=0.9",
+        "origin": "https://www.jiomart.com",
+        "referer": "https://www.jiomart.com/",
+        "user-agent": (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
+        ),
+        "vertical": "jiomart",
+    }
     async with httpx.AsyncClient() as client:
-        headers = {
-            "accept": "application/json",
-            "accept-language": "en-US,en;q=0.9",
-            "access-control-allow-origin": "*",
-            "origin": "https://www.jiomart.com",
-            "priority": "u=1, i",
-            "referer": "https://www.jiomart.com/",
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "cross-site",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-            "vertical": "jiomart",
-        }
-        result = await client.get(url=f"{REVIEW_SUMMARY_ENDPOINT}{item_id}", headers=headers)
-        result = result.json()
-        if result.get("resultInfo").get("status") == "SUCCESS" and result.get("data"):
-            metadata.summary = result.get("data").get("summary")
-        result = await client.get(url=f"{REVIEW_ENDPOINT}{item_id}", headers=headers)
-        result = result.json()
-        if result.get("resultInfo").get("status") == "SUCCESS" and result.get("data"):
-            metadata.rating = result.get("data").get("averageRating")
-        result = await client.get(url=f"{ITEM_DISTANCE_ENDPOINT}{pincode}", headers=headers)
-        result = result.json()
-        if result.get("status") == "success":
-            lat, lng = result.get("result").get("lat"), result.get("result").get("lon")
+        async with asyncio.TaskGroup() as tg:
+            summary_task = tg.create_task(client.get(f"{REVIEW_SUMMARY_ENDPOINT}{item_id}", headers=headers))
+            rating_task = tg.create_task(client.get(f"{REVIEW_ENDPOINT}{item_id}", headers=headers))
+            distance_task = tg.create_task(client.get(f"{ITEM_DISTANCE_ENDPOINT}{pincode}", headers=headers))
+
+        # Process responses after all complete
+        summary_result = summary_task.result().json()
+        if summary_result.get("resultInfo", {}).get("status") == "SUCCESS" and summary_result.get("data"):
+            metadata.summary = summary_result["data"].get("summary")
+
+        rating_result = rating_task.result().json()
+        if rating_result.get("resultInfo", {}).get("status") == "SUCCESS" and rating_result.get("data"):
+            metadata.rating = rating_result["data"].get("averageRating")
+
+        distance_result = distance_task.result().json()
+        if distance_result.get("status") == "success":
+            loc = distance_result.get("result", {})
+            lat, lng = loc.get("lat"), loc.get("lon")
             distance = haversine((user_lat, user_lng), (lat, lng), unit=Unit.KILOMETERS)
             metadata.distance = round(distance)
-        return metadata
+
+    return metadata
 
 
 gdf = None  # GeoDataFrame for pin code polygons
