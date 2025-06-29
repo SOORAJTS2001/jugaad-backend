@@ -94,13 +94,14 @@ async def fetch_cookies(client: httpx.AsyncClient, pincode: str) -> dict:
 
 async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, source_url: str,
                       cookie: dict) -> dict | None:
+    cookie_str = "; ".join(f"{k}={v}" for k, v in cookie.items())
     resp = await client.get(
         f"{PRICE_ENDPOINT}{item_id}",
         headers={
             "accept": "application/json, text/javascript, */*; q=0.01",
             "pin": pincode,
             "referer": source_url,
-            "cookie": cookie,
+            "cookie": cookie_str,
             "user-agent": (
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) "
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 "
@@ -132,6 +133,7 @@ async def fetch_price(client: httpx.AsyncClient, item_id: str, pincode: str, sou
         "category": gtm["category"],
         "last_updated_timestamp": datetime.now(timezone.utc),
     }
+
 
 # ---------------------------------------------------------------------------
 # DB helpers
