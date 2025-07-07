@@ -74,6 +74,7 @@ class MailTemplate(BaseModel):
     prev_price: str
     curr_price: str
     change_percent: str
+    emails_remaining: int
 
 
 class LocationResponse(BaseModel):

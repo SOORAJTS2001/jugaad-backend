@@ -23,6 +23,8 @@ uvicorn = "^0.34.3"
 asyncpg = "^0.30.0"
 aiosmtplib = "^4.0.1"
 haversine = "^2.9.0"
+alembic = "^1.16.2"
+psycopg2-binary = "^2.9.10"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "*"

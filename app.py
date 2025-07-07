@@ -16,9 +16,9 @@ from starlette.responses import JSONResponse
 
 from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsPriceLoggerBaseModel, LocationResponse, \
     ItemMetadata
-from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
+from models import Base, DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from scheduler import start_scheduler
-from settings import async_engine, Base
+from settings import async_engine
 
 LOGGER = logging.getLogger("app")
 
@@ -26,7 +26,6 @@ LOGGER = logging.getLogger("app")
 app = FastAPI()
 
 origins = [
-    "http://localhost",
     "http://localhost:8080",  # Your frontend's origin
     "https://jugaad-frontend.vercel.app",
     "http://192.168.31.160:8080"
@@ -261,10 +260,19 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
     for item in results:
         for existing_item in existing_user.selected_items:
             if item.item_id == existing_item.item_id:
+                stmt = select(ItemsPriceLogger).where(
+                    (ItemsPriceLogger.item_id == item.item_id) & (
+                                ItemsPriceLogger.pincode == existing_user.pincode)).order_by(
+                    desc(ItemsPriceLogger.last_updated_timestamp))
+                result = await db.execute(stmt)
+                logs = []
+                for log in result.scalars().all():
+                    logs.append(ItemsPriceLoggerBaseModel(**log.to_dict()))
                 item = AddedItemsResponse.model_validate(item)
                 item.price_change = str(item.mrp_price - item.selling_price)
                 item.max_price = existing_item.max_price
                 item.max_offer = existing_item.max_offer
+                item.logs = logs
                 items.append(item)
     return items
 

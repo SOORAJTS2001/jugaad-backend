@@ -5,7 +5,9 @@ from sqlalchemy import Column, String, Float, Integer, DateTime, PrimaryKeyConst
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from settings import Base
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
 
 
 # --- Database Models ---
@@ -30,6 +32,8 @@ class UserSelectedItems(Base):
     max_price = Column(Float, nullable=True)
     min_offer = Column(Float, nullable=True)
     max_offer = Column(Float, nullable=True)
+    email_sent_count = Column(Integer, nullable=False, default=3,  # Python-side default
+                              server_default="3")
 
     def __eq__(self, other):
         return self.item_id == other.item_id
@@ -46,7 +50,7 @@ class UserSelectedItems(Base):
 class Items(Base):
     __tablename__ = "items"
     item_id = Column(String, index=True)
-    source_url = Column(String,)
+    source_url = Column(String, )
     pincode = Column(String)
     name = Column(String, index=True, nullable=True)
     mrp_price = Column(Float, nullable=True)

@@ -62,13 +62,18 @@ async def send_mail_async(data: MailTemplate) -> None:
                 Want to buy now?
                 <a href="{data.source_url}" style="color:#0a85ea;text-decoration:underline;" target="_blank">Click here to shop on JioMart</a>
               </p>
+
+              <!-- New muted section -->
+              <div style="font-size:12px;color:#999;margin-top:20px;text-align:center;">
+                You have <strong>{data.emails_remaining}</strong> more notification remaining for this price change.
+              </div>
             </td>
           </tr>
         </table>
         <p style="font-size:11px;color:#888;text-align:center;margin-top:20px;">This alert was sent to {data.user_email}</p>
       </body>
     </html>
-    """
+"""
     msg.add_alternative(html_content, subtype='html')
 
     await aiosmtplib.send(

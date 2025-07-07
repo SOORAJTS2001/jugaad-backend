@@ -13,6 +13,7 @@ Required env vars (Railway → Variables):
 Install dependency:
     pip install aiosmtplib
 """
+from base_models import MailTemplate
 from mailer import send_mail_async
 
 # ============================================
@@ -34,7 +35,7 @@ from sqlalchemy.orm import selectinload
 
 from base_models import MailTemplate
 from models import DBUser, Items, ItemsPriceLogger, UserSelectedItems
-from settings import async_engine
+from settings import async_engine, EMAIL_SENT_COUNT
 
 PRICE_ENDPOINT = "https://www.jiomart.com/catalog/productdetails/get/"
 ITEM_DISTANCE_ENDPOINT = "https://www.jiomart.com/mst/rest/v1/5/pin/"
@@ -154,34 +155,39 @@ async def get_latest_price(session: AsyncSession, item_id: str, pincode: str) ->
 # ---------------------------------------------------------------------------
 
 async def price_match(
-        user: DBUser, selected_item: UserSelectedItems, item_price: dict, session: AsyncSession
-) -> bool:
+        user: DBUser, selected_item: UserSelectedItems, current_price: dict, session: AsyncSession
+) -> UserSelectedItems | None:
     """Return True if mail was sent."""
     prev_price_row = await get_latest_price(session, selected_item.item_id, user.pincode)
     if not prev_price_row:
-        return False  # first run – nothing to compare
-
-    price_dropped = item_price["selling_price"] < selected_item.max_price
-    offer_improved = item_price["discount_percent"] > selected_item.max_offer
-    if not (price_dropped or offer_improved):
-        return False
-
+        return None  # first run – nothing to compare
+    if current_price["selling_price"] < prev_price_row.selling_price and current_price[
+        "selling_price"] < selected_item.max_price:
+        selected_item.email_sent_count = EMAIL_SENT_COUNT
+    price_dropped = current_price["selling_price"] < selected_item.max_price
+    offer_improved = current_price["discount_percent"] > selected_item.max_offer
+    if not any([price_dropped,
+                offer_improved]) or selected_item.email_sent_count == 0:  # if current price is not below user threshold
+        # or email_sent_count ==0, don't do anything
+        return None
     change_percent = round(
-        ((selected_item.max_price - item_price["selling_price"]) / prev_price_row.selling_price) * 100
+        ((selected_item.max_price - current_price["selling_price"]) / prev_price_row.selling_price) * 100
     )
-
+    selected_item.email_sent_count = max(int(selected_item.email_sent_count) - 1, 0)
     await send_mail_async(
         MailTemplate(
+            emails_remaining=selected_item.email_sent_count,
             user_email=user.email,
-            item_name=item_price["name"],
-            image_url=item_price["image_url"],
-            source_url=item_price["source_url"],
+            item_name=current_price["name"],
+            image_url=current_price["image_url"],
+            source_url=current_price["source_url"],
             prev_price=str(int(selected_item.max_price)),
-            curr_price=str(item_price["selling_price"]),
+            curr_price=str(current_price["selling_price"]),
             change_percent=str(change_percent),
         )
     )
-    return True
+    LOGGER.info(f"Email sent to the {user.email=} about {current_price['name']}")
+    return selected_item
 
 
 async def process_user(user: DBUser, client: httpx.AsyncClient):
@@ -193,20 +199,22 @@ async def process_user(user: DBUser, client: httpx.AsyncClient):
             if not item:
                 continue
 
-            item_price = await fetch_price(client, item.item_id, user.pincode, item.source_url, cookie=cookie)
-            if not item_price:
+            current_price = await fetch_price(client, item.item_id, user.pincode, item.source_url, cookie=cookie)
+            if not current_price:
                 item.is_available = False
                 await session.commit()
                 continue
-            await price_match(user, selected_item, item_price, session)
+            if selected_item := await price_match(user, selected_item, current_price,
+                                                  session):  # if there is any change in the selected item add it to db
+                session.add(selected_item)
 
             # update Items row
-            for key, val in item_price.items():
+            for key, val in current_price.items():
                 if hasattr(item, key):
                     setattr(item, key, val)
 
             # log history
-            hist_payload = item_price.copy()
+            hist_payload = current_price.copy()
             hist_payload.pop("image_url")  # not stored in history
             session.add(ItemsPriceLogger(**hist_payload))
 
