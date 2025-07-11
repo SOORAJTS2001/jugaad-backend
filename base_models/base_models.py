@@ -8,9 +8,15 @@ from pydantic import BaseModel
 class UserInput(BaseModel):
     uid: str
     email: str
-    pincode: str | None = "682020"
+    pincode: str | None = None
     username: str | None = None
     item_id: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+
+class ItemDetailInput(BaseModel):
+    item_id: str
+    pincode: str
     lat: float | None = None
     lng: float | None = None
 

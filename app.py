@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os.path
 import re
@@ -8,14 +9,13 @@ import httpx
 from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from haversine import haversine, Unit
-import asyncio
 from shapely.geometry import Point
 from sqlalchemy import select, tuple_, desc, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.responses import JSONResponse
 
 from base_models import UserInput, AddedItemsRequest, AddedItemsResponse, ItemsPriceLoggerBaseModel, LocationResponse, \
-    ItemMetadata
+    ItemMetadata, ItemDetailInput
 from models import Base, DBUser, Items, ItemsPriceLogger, UserSelectedItems
 from scheduler import start_scheduler
 from settings import async_engine
@@ -74,8 +74,8 @@ async def is_existing_user(db, user_uid: str):
     return result.scalar_one_or_none()  # Use scalar_one_or_none() for a single result
 
 
-
-async def get_metadata(item_id: str, pincode: str, user_lat: float, user_lng: float) -> ItemMetadata:
+async def get_metadata(item_id: str, pincode: str, user_lat: float | None = None,
+                       user_lng: float | None = None) -> ItemMetadata:
     metadata = ItemMetadata()
     headers = {
         "accept": "application/json",
@@ -104,11 +104,11 @@ async def get_metadata(item_id: str, pincode: str, user_lat: float, user_lng: fl
             metadata.rating = rating_result["data"].get("averageRating")
 
         distance_result = distance_task.result().json()
-        if distance_result.get("status") == "success":
+        if distance_result.get("status") == "success" and user_lng and user_lng:
             loc = distance_result.get("result", {})
             lat, lng = loc.get("lat"), loc.get("lon")
             distance = haversine((user_lat, user_lng), (lat, lng), unit=Unit.KILOMETERS)
-            metadata.distance = round(distance)
+            metadata.distance = round(distance,2)
 
     return metadata
 
@@ -262,7 +262,7 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
             if item.item_id == existing_item.item_id:
                 stmt = select(ItemsPriceLogger).where(
                     (ItemsPriceLogger.item_id == item.item_id) & (
-                                ItemsPriceLogger.pincode == existing_user.pincode)).order_by(
+                            ItemsPriceLogger.pincode == existing_user.pincode)).order_by(
                     desc(ItemsPriceLogger.last_updated_timestamp))
                 result = await db.execute(stmt)
                 logs = []
@@ -272,18 +272,16 @@ async def get_items(user: UserInput, db: AsyncSession = Depends(get_db_session))
                 item.price_change = str(item.mrp_price - item.selling_price)
                 item.max_price = existing_item.max_price
                 item.max_offer = existing_item.max_offer
+                item.pincode = existing_user.pincode
                 item.logs = logs
                 items.append(item)
     return items
 
 
 @app.post("/get-item", response_model=AddedItemsResponse)
-async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
-    existing_user: DBUser = await is_existing_user(db, user.uid)
-    if not existing_user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+async def get_item(input: ItemDetailInput, db: AsyncSession = Depends(get_db_session)):
     stmt = select(Items).where(
-        (Items.item_id == user.item_id) & (Items.pincode == existing_user.pincode)
+        (Items.item_id == input.item_id) & (Items.pincode == input.pincode)
     )
     result = await db.execute(stmt)
     result = result.scalar_one_or_none()
@@ -291,7 +289,7 @@ async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     item = AddedItemsResponse.model_validate(result)
     stmt = select(ItemsPriceLogger).where(
-        (ItemsPriceLogger.item_id == user.item_id) & (ItemsPriceLogger.pincode == existing_user.pincode)).order_by(
+        (ItemsPriceLogger.item_id == input.item_id) & (ItemsPriceLogger.pincode == input.pincode)).order_by(
         desc(ItemsPriceLogger.last_updated_timestamp))
     result = await db.execute(stmt)
     logs = []
@@ -299,8 +297,8 @@ async def get_item(user: UserInput, db: AsyncSession = Depends(get_db_session)):
         logs.append(ItemsPriceLoggerBaseModel(**log.to_dict()))
     item.logs = logs
     item.last_updated_timestamp = logs[0].last_updated_timestamp
-    item.item_metadata = await get_metadata(item_id=item.item_id, pincode=item.pincode, user_lat=user.lat,
-                                            user_lng=user.lng)
+    item.item_metadata = await get_metadata(item_id=item.item_id, pincode=item.pincode, user_lat=input.lat,
+                                            user_lng=input.lng)
     return item
 
 
