@@ -6,9 +6,7 @@ WORKDIR /app
 
 # Prevent Python from writing .pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
-# Prevent Python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
-
 
 # Install system dependencies
 RUN apt-get update \
@@ -22,14 +20,20 @@ RUN curl -sSL https://install.python-poetry.org | python3 - \
 # Disable Poetry virtualenv creation
 RUN poetry config virtualenvs.create false
 
-# Copy dependency declarations first to cache Docker layers
+# Copy dependency declarations
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies (excluding dev, not installing package itself)
-RUN poetry install --no-root
+# Install dependencies
+RUN poetry install --no-root --no-interaction --no-ansi
 
-# Copy the application code
+# Copy source code
 COPY . .
 
-# Run FastAPI using uvicorn
-CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port $PORT"]
+# Default port Render provides
+ENV PORT=8000
+
+# Explicitly expose the port
+EXPOSE $PORT
+
+# Run FastAPI via Uvicorn (Render passes PORT automatically)
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,9 +1,10 @@
 import os
 from logging.config import fileConfig
-
+from dotenv import load_dotenv
 from alembic import context
 from sqlalchemy import pool
 
+load_dotenv("local.env")
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
