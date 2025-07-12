@@ -34,6 +34,5 @@ ENV PORT=8000
 
 # Explicitly expose the port
 EXPOSE $PORT
-
 # Run FastAPI via Uvicorn (Render passes PORT automatically)
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
